@@ -2786,11 +2786,6 @@ func getPod(name, ns, nodeName, podIP string, namedPort bool) *corev1.Pod {
 				},
 			},
 			PodIP: podIP,
-			PodIPs: []corev1.PodIP{
-				{
-					IP: podIP,
-				},
-			},
 		},
 	}
 }

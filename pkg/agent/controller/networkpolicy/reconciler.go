@@ -177,10 +177,6 @@ type reconciler struct {
 
 	// priorityAssigners provides interfaces to manage OF priorities for each OVS table.
 	priorityAssigners map[binding.TableIDType]*tablePriorityAssigner
-	// ipv4Enabled tells if IPv4 is supported on this Node or not.
-	ipv4Enabled bool
-	// ipv6Enabled tells is IPv6 is supported on this Node or not.
-	ipv6Enabled bool
 }
 
 // newReconciler returns a new *reconciler.
@@ -202,11 +198,6 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		lastRealizeds:     sync.Map{},
 		idAllocator:       newIDAllocator(),
 		priorityAssigners: priorityAssigners,
-	}
-	// Check if ofClient is nil or not to be compatible with unit tests.
-	if ofClient != nil {
-		reconciler.ipv4Enabled = ofClient.IsIPv4Enabled()
-		reconciler.ipv6Enabled = ofClient.IsIPv6Enabled()
 	}
 	return reconciler
 }
@@ -401,7 +392,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		// Addresses got from source GroupMembers' IPs.
 		from1 := groupMembersToOFAddresses(rule.FromAddresses)
 		// Get addresses that in From IPBlock but not in Except IPBlocks.
-		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks)
 
 		podsByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
 
@@ -464,7 +455,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			}
 			if len(rule.To.IPBlocks) > 0 {
 				// Diff Addresses between To and Except of IPBlocks
-				to := ipBlocksToOFAddresses(rule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+				to := ipBlocksToOFAddresses(rule.To.IPBlocks)
 				ofRule.To = append(ofRule.To, to...)
 			}
 		}
@@ -526,7 +517,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 	// only happen to Group members.
 	if newRule.Direction == v1beta2.DirectionIn {
 		from1 := groupMembersToOFAddresses(newRule.FromAddresses)
-		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks)
 		addedFrom := groupMembersToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
 		deletedFrom := groupMembersToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
 
@@ -826,38 +817,34 @@ func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Ad
 	return addresses
 }
 
-func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled bool) []types.Address {
+func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0)
 	for _, b := range ipBlocks {
-		blockCIDR := ip.IPNetToNetIPNet(&b.CIDR)
-		if !isIPNetSupportedByAF(blockCIDR, ipv4Enabled, ipv6Enabled) {
-			klog.Infof("IPBlock %s is using unsupported address family, skip it", blockCIDR.String())
-			continue
-		}
-		exceptIPNets := make([]*net.IPNet, 0, len(b.Except))
+		exceptIPNet := make([]*net.IPNet, 0, len(b.Except))
 		for _, c := range b.Except {
-			except := ip.IPNetToNetIPNet(&c)
-			exceptIPNets = append(exceptIPNets, except)
+			exceptIPNet = append(exceptIPNet, ip.IPNetToNetIPNet(&c))
 		}
-		diffCIDRs, err := ip.DiffFromCIDRs(blockCIDR, exceptIPNets)
+		diffCIDRs, err := ip.DiffFromCIDRs(ip.IPNetToNetIPNet(&b.CIDR), exceptIPNet)
 		if err != nil {
+			// Currently only IPv4 addresses are supported
 			klog.Errorf("Error when determining diffCIDRs: %v", err)
 			continue
 		}
 		for _, d := range diffCIDRs {
-			addresses = append(addresses, openflow.NewIPNetAddress(*d))
+			addresses = append(addresses, ipNetToOFAddress(*ip.NetIPNetToIPNet(d)))
 		}
 	}
 
 	return addresses
 }
 
-func isIPNetSupportedByAF(ipnet *net.IPNet, ipv4Enabled, ipv6Enabled bool) bool {
-	if (ipnet.IP.To4() != nil && ipv4Enabled) || (ipnet.IP.To4() == nil && ipv6Enabled) {
-		return true
+func ipNetToOFAddress(in v1beta2.IPNet) *openflow.IPNetAddress {
+	ipNet := net.IPNet{
+		IP:   net.IP(in.IP),
+		Mask: net.CIDRMask(int(in.PrefixLength), 32),
 	}
-	return false
+	return openflow.NewIPNetAddress(ipNet)
 }
 
 func ipsToOFAddresses(ips sets.String) []types.Address {

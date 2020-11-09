@@ -20,40 +20,12 @@ import (
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
-type MatchKey struct {
-	ofProtocol    binding.Protocol
-	valueCategory AddressCategory
-	keyString     string
-}
-
-func (m *MatchKey) GetOFProtocol() binding.Protocol {
-	return m.ofProtocol
-}
-
-func (m *MatchKey) GetValueCategory() AddressCategory {
-	return m.valueCategory
-}
-
-func (m *MatchKey) GetKeyString() string {
-	return m.keyString
-}
-
-func NewMatchKey(proto binding.Protocol, valueCategory AddressCategory, keyString string) *MatchKey {
-	return &MatchKey{
-		keyString:     keyString,
-		ofProtocol:    proto,
-		valueCategory: valueCategory,
-	}
-}
-
 type AddressCategory uint8
 
 const (
 	IPAddr AddressCategory = iota
 	IPNetAddr
 	OFPortAddr
-	L4PortAddr
-	UnSupported
 )
 
 type AddressType int
@@ -65,7 +37,7 @@ const (
 
 type Address interface {
 	GetMatchValue() string
-	GetMatchKey(addrType AddressType) *MatchKey
+	GetMatchKey(addrType AddressType) int
 	GetValue() interface{}
 }
 
