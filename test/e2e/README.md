@@ -27,7 +27,9 @@ We require the following to be installed on your host machine:
 ##### Ubuntu 18.04 (or later)
 
 You can install all dependencies with `sudo apt install vagrant ansible
-virtualbox`.
+virtualbox`
+
+You will also need docker. If not already present, follow directions from [here](https://docs.docker.com/engine/install/ubuntu/)
 
 ##### Mac OS
 
@@ -36,6 +38,7 @@ You can install all the dependencies with [brew](https://brew.sh/):
 * `brew cask install virtualbox`
 * `brew cask install vagrant`
 * `brew install ansible`
+* `brew cask install docker`
 
 If an action is required on your part, `brew` will let you know in its log
 messages.
