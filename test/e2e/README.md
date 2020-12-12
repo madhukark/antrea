@@ -40,6 +40,16 @@ You can install all the dependencies with [brew](https://brew.sh/):
 If an action is required on your part, `brew` will let you know in its log
 messages.
 
+#### Get this repo
+
+Install git if not already present
+
+`Ubuntu> sudo apt install -y git`
+
+Clone this repo:
+
+`git clone https://github.com/vmware-tanzu/antrea.git`
+
 #### Managing the cluster
 
 Use the following Bash scripts to manage the Kubernetes Nodes with Vagrant:
